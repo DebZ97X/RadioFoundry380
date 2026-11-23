@@ -2916,6 +2916,8 @@ def main(argv=None):
     p.add_argument("--section", choices=VIEW_SECTIONS, action="append")
     p.add_argument("--json", action="store_true")
     sub.add_parser("reset")
+    p = sub.add_parser("aes", help="manage the DMR AES key and channel assignment")
+    p.add_argument("op", choices=["load", "status", "unbind"])
     p = sub.add_parser("screenshot")
     p.add_argument("-o", "--output", required=True)
     p.add_argument("--scale", type=int, default=1)
@@ -3073,6 +3075,40 @@ def main(argv=None):
             elif a.cmd == "view":
                 v = link.view(a.section)
                 print(json.dumps(v, indent=1) if a.json else "\n".join(f"{k}={x}" for k, x in v.items()))
+            elif a.cmd == "aes":
+                binding = 0x000A
+                if a.op == "load":
+                    from getpass import getpass
+
+                    if link.port.startswith("udp:"):
+                        raise DebugLinkError("Provision the AES key through the USB serial port.")
+                    v = link.view(["core"])
+                    number = int(v.get("channel_number", "0"))
+                    if not 1 <= number <= 1024 or v.get("vfo") != "0" or v.get("mode") != "dmr":
+                        raise DebugLinkError("Select a programmed DMR simplex channel first.")
+                    value = getpass("AES key (64 hex characters): ").strip()
+                    try:
+                        key = bytes.fromhex(value)
+                    except ValueError:
+                        key = b""
+                    if len(value) != 64 or len(key) != 32:
+                        raise DebugLinkError("Expected exactly 64 hex characters.")
+                    try:
+                        link.request(CPKV, struct.pack("<BH", 4, number) + key)
+                    except DebugLinkError as e:
+                        raise DebugLinkError(
+                            "AES provisioning failed. Check for the AES build, a simplex channel, and an available settings area."
+                        ) from e
+                    print(f"Stored AES key ID 1 and assigned it to codeplug channel {number}.")
+                elif a.op == "unbind":
+                    link.cpkv_remove(binding)
+                    print("Removed the AES channel assignment.")
+                else:
+                    value = link.cpkv_get(binding)
+                    if value is not None and len(value) == 4:
+                        print(f"AES key ID 1 assigned to codeplug channel {int.from_bytes(value[:2], 'little')}.")
+                    else:
+                        print("No AES channel assignment.")
             elif a.cmd == "reset":
                 print(f"counters reset at t={link.reset() / 1000:.3f} s")
             elif a.cmd == "screenshot":

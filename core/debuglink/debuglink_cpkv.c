@@ -7,8 +7,9 @@
 #include "debuglink/debuglink.h"
 #include "debuglink/debuglink_proto.h"
 #include "codeplug/codeplug_kv.h"
+#include "dmr/call/dmr_aes_rx.h"
 
-#if CONFIG_DMR_DATA_CORE || CONFIG_DMR_TRUNK
+#if CONFIG_DMR_DATA_CORE || CONFIG_DMR_TRUNK || defined(RF_DMR_AES_RX)
 #define VALUE_MAX	128u	// the longest value set through here: a request is at most DL_REQ_MAX bytes a piece
 
 static uint16_t rd16(const uint8_t *p)
@@ -76,6 +77,15 @@ size_t __attribute__((noinline)) debuglink_cmd_cpkv(const uint8_t *req, uint16_t
 		}
 		return 1;
 	}
+#ifdef RF_DMR_AES_RX
+	case DL_CPKV_AES_RX_SET:
+		if (len != 3u + DMR_AES_RX_KEY_SIZE) {
+			out[0] = DL_ST_BAD_ARG;
+		} else if (!dmr_aes_rx_provision(key, req + 3)) {
+			out[0] = DL_ST_BUSY; // invalid channel, occupied slot, or storage could not commit
+		}
+		return 1;
+#endif
 	case DL_CPKV_REMOVE:	// key u16
 		if (!codeplug_kv_remove(key)) {
 			out[0] = DL_ST_BUSY;

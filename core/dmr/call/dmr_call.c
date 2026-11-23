@@ -5,6 +5,7 @@
 // the modem transmits (their status can't be trusted then, docs/spec/dmr-modem.md 6.5).
 #include <string.h>
 #include "dmr/call/dmr_call.h"
+#include "dmr/call/dmr_aes_rx.h"
 #include "config.h"
 #include "dmr/fec/dmrCach.h"
 #include "dmr/fec/dmrFec.h"
@@ -122,6 +123,11 @@ static struct {
 	bool pi_pending;
 	uint32_t pi_pending_ms;
 	uint8_t pi_pending_alg, pi_pending_key;
+#ifdef RF_DMR_AES_RX
+	dmr_aes_rx_t aes_rx;
+	bool aes_rx_active;
+	bool aes_rx_voice_seen;
+#endif
 
 	// repeater outbound
 	uint32_t rpt_last_ms;
@@ -131,6 +137,11 @@ static struct {
 	uint32_t tick_seen;
 
 	// TX
+#ifdef RF_DMR_AES_TX
+	dmr_aes_rx_t aes_tx;
+	bool aes_tx_required, aes_tx_active, aes_tx_pi_pending, aes_tx_staged;
+	uint8_t aes_tx_pi[12];
+#endif
 	uint8_t tx;
 	uint8_t tx_lc[DMR_LC_BYTES];
 	dmr_target_t tx_target_used;
@@ -586,6 +597,9 @@ static void rx_end(uint32_t now)
 	s.last_call_end_ms = now;
 	s.call_end_seen = true;
 	s.rx = RXC_NONE;
+#ifdef RF_DMR_AES_RX
+	s.aes_rx_active = false;
+#endif
 	s.have_index = false;
 	le_reset();
 	s.dirty = true;
@@ -644,6 +658,12 @@ static void rx_lc(const uint8_t lc[DMR_LC_BYTES], const dmr_burst_t *b, bool lat
 	c->late_entry = late;
 	memcpy(c->alias, s.ta.text, sizeof(c->alias));
 	c->alias_complete = s.ta.complete;
+#ifdef RF_DMR_AES_RX
+	if (new_talker) {
+		s.aes_rx_active = false;
+		s.aes_rx_voice_seen = false;
+	}
+#endif
 	if (!continuing) {
 		c->pi_header = false;
 		c->pi_alg = c->pi_key = 0;
@@ -710,6 +730,11 @@ static void rx_recheck(uint32_t now)
 static void rx_play(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 {
 	uint8_t i = b->voice_index % 6;
+#ifdef RF_DMR_AES_RX
+	uint32_t prev_slot = s.last_voice_slot;
+	uint32_t prev_ms = s.last_voice_ms;
+	bool had_voice = s.aes_rx_voice_seen;
+#endif
 
 	if (s.have_index) {
 		uint8_t missing = (uint8_t)((i + 6 - s.next_index) % 6);
@@ -741,8 +766,18 @@ static void rx_play(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 		stats.rx_encrypted_calls++;
 		s.dirty = true;
 	}
-	// No key, or a PI header: an MI-based scheme the static key hook can't undo (docs/spec/gotchas.md 6.4)
-	if (enc && (!s.cfg.privacy || s.view.caller.pi_header)) {
+	bool aes = false;
+#ifdef RF_DMR_AES_RX
+	if (s.aes_rx_active && (i != s.aes_rx.next ||
+	    (had_voice && (slot != 0 && prev_slot != 0 ?
+			  (uint32_t)(slot - prev_slot) >= SUPERFRAME_SLOTS :
+			  (uint32_t)(now - prev_ms) >= VOICE_PERIOD_MS * 6u))))
+		s.aes_rx_active = false; // alignment uncertain; wait for a fresh header
+	aes = s.aes_rx_active && s.view.caller.pi_header;
+	s.aes_rx_voice_seen = true;
+#endif
+	// MI-based calls need the matching AES session, never the static privacy hook.
+	if (enc && !aes && (!s.cfg.privacy || s.view.caller.pi_header)) {
 		stats.rx_enc_dropped++;
 		TR_WHAT('e');
 		sink_lost(DMR_AMBE_FRAMES_PER_BURST);	// no key: never play the scrambled voice
@@ -752,6 +787,11 @@ static void rx_play(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 	uint8_t v[DMR_VOICE_BYTES];
 
 	memcpy(v, b->payload, DMR_VOICE_BYTES);
+#ifdef RF_DMR_AES_RX
+	if (aes)
+		dmr_aes_rx_burst(&s.aes_rx, v);
+	else
+#endif
 	if (enc)
 		s.cfg.privacy(v, i, false, s.cfg.privacy_ctx);
 	stats.rx_voice_bursts++;
@@ -995,6 +1035,20 @@ static void rx_pi_header(const dmr_burst_t *b, uint32_t now)
 	c->pi_header = true;
 	c->pi_alg = b->payload[0];
 	c->pi_key = b->payload[1];
+#ifdef RF_DMR_AES_RX
+	if (s.cfg.aes_rx_enabled && !s.cfg.rmo && b->len >= 12 && b->payload[0] == DMR_AES_RX_ALG &&
+	    b->payload[1] == DMR_AES_RX_VENDOR && b->payload[2] == DMR_AES_RX_KEY_ID &&
+	    (((uint32_t)b->payload[7] << 16) | ((uint32_t)b->payload[8] << 8) | b->payload[9]) == c->dst) {
+		c->pi_key = b->payload[2];
+		if (!s.aes_rx_voice_seen) {
+			uint32_t mi = ((uint32_t)b->payload[3] << 24) | ((uint32_t)b->payload[4] << 16) |
+				      ((uint32_t)b->payload[5] << 8) | b->payload[6];
+			s.aes_rx_active = dmr_aes_rx_start(&s.aes_rx, mi);
+		}
+	} else {
+		s.aes_rx_active = false;
+	}
+#endif
 	c->encrypted = true;
 	s.dirty = true;
 }
@@ -1322,6 +1376,14 @@ static void tx_fill(uint32_t now)
 			s.headers_left--;
 			continue;
 		}
+#ifdef RF_DMR_AES_TX
+		if (s.aes_tx_pi_pending) {
+			if (!tx_put(DMR_BURST_PI_HEADER, 0, true, s.aes_tx_pi, sizeof(s.aes_tx_pi)))
+				return;
+			s.aes_tx_pi_pending = false;
+			continue;
+		}
+#endif
 		if (s.stop_req && s.voice_index == 0 && !tx_tail_hold()) {
 			tx_terminate(now, inflight);	// superframe boundary
 			return;
@@ -1342,11 +1404,23 @@ static void tx_fill(uint32_t now)
 		uint8_t v[DMR_VOICE_BYTES];
 
 		memcpy(v, s.stage, DMR_VOICE_BYTES);
+#ifdef RF_DMR_AES_TX
+		if (s.aes_tx_active) {
+			if (!s.aes_tx_staged) {
+				dmr_aes_rx_burst(&s.aes_tx, v);
+				memcpy(s.stage, v, sizeof(v));
+				s.aes_tx_staged = true; // a queue retry sends these same bytes
+			}
+		} else
+#endif
 		if (s.cfg.privacy && (s.cfg.tx_svc & DMR_SVC_PRIVACY))
 			s.cfg.privacy(v, s.voice_index, true, s.cfg.privacy_ctx);
 		if (!tx_put(DMR_BURST_VOICE, s.voice_index, false, v, DMR_VOICE_BYTES))
 			return;	// keep the staged frames for the next try
 		s.stage_n = 0;
+#ifdef RF_DMR_AES_TX
+		s.aes_tx_staged = false;
+#endif
 		if (s.voice_index == 0 && s.tx_sf < 255)
 			s.tx_sf++;
 		if (s.voice_index == 0 && s.stop_req)
@@ -1354,6 +1428,37 @@ static void tx_fill(uint32_t now)
 		s.voice_index = (uint8_t)((s.voice_index + 1) % 6);
 	}
 }
+
+#ifdef RF_DMR_AES_TX
+static bool prepare_aes_tx(dmr_lc_t *l)
+{
+	static uint32_t last_mi;
+	uint32_t mi;
+	s.aes_tx_active = s.aes_tx_pi_pending = s.aes_tx_staged = false;
+	if (!s.aes_tx_required)
+		return !s.cfg.aes_rx_enabled; // never fall back to clear on a bound channel
+	if (s.cfg.rmo || sfr_user() || l->flco != DMR_FLCO_GROUP_VOICE || l->dst == 0 || s.cfg.aes_mi == NULL ||
+	    !s.cfg.aes_mi(&mi) || mi == 0 || mi == last_mi || !dmr_aes_rx_start(&s.aes_tx, mi))
+		return false;
+
+	last_mi = mi;
+	l->fid = DMR_AES_RX_VENDOR;
+	l->svc |= DMR_SVC_PRIVACY;
+	uint8_t *p = s.aes_tx_pi;
+	p[0] = DMR_AES_RX_ALG;
+	p[1] = DMR_AES_RX_VENDOR;
+	p[2] = DMR_AES_RX_KEY_ID;
+	for (unsigned i = 0; i < 4; i++)
+		p[3 + i] = (uint8_t)(mi >> (24 - 8 * i));
+	for (unsigned i = 0; i < 3; i++)
+		p[7 + i] = (uint8_t)(l->dst >> (16 - 8 * i));
+	uint16_t crc = (uint16_t)(dmr_crc_ccitt(p, 10) ^ DMR_CRC_MASK_PI);
+	p[10] = (uint8_t)(crc >> 8);
+	p[11] = (uint8_t)crc;
+	s.aes_tx_active = s.aes_tx_pi_pending = true;
+	return true;
+}
+#endif
 
 static void tx_start_voice(uint32_t now)
 {
@@ -1367,6 +1472,12 @@ static void tx_start_voice(uint32_t now)
 		.dst = t.id & DMR_ID_MAX,
 		.src = s.cfg.own_id & DMR_ID_MAX,
 	};
+#ifdef RF_DMR_AES_TX
+	if (!prepare_aes_tx(&l)) {
+		tx_deny(DMR_TX_ERR_REJECTED);
+		return;
+	}
+#endif
 	dmr_timing_t timing;
 
 	if (s.cfg.rmo)
@@ -1392,6 +1503,10 @@ static void tx_start_voice(uint32_t now)
 	s.tx_emb_cur = 0;
 	s.tx_sf = 0;
 	s.tx_ta_n = 0;
+#ifdef RF_DMR_AES_TX
+	// Keep voice LC in the embedded stream during this bench call.
+	if (!s.aes_tx_active) {
+#endif
 #if CONFIG_DMR_TALKER_ALIAS
 	s.tx_ta_n = (uint8_t)dmr_ta_encode(s.cfg.tx_alias, s.cfg.tx_alias_format, s.tx_ta);
 #endif
@@ -1400,6 +1515,9 @@ static void tx_start_voice(uint32_t now)
 	if (s.tx_gps_set) {
 		dmr_gps_encode(&s.tx_gps, s.tx_ta[s.tx_ta_n]);
 		s.tx_gps_at = s.tx_ta_n++;
+	}
+#endif
+#ifdef RF_DMR_AES_TX
 	}
 #endif
 	s.queue_cap = s.modem->tx_queue_space();
@@ -1800,6 +1918,9 @@ static void handle_event(const evq_item_t *it, uint32_t now)
 #endif
 		if (s.rx == RXC_PLAY && !transmitting() && (it->ts == 0 || s.call_ts == 0 || it->ts == s.call_ts)) {
 			// The next burst is concealed now; if it still comes, the repeat rule drops it (same index)
+#ifdef RF_DMR_AES_RX
+			s.aes_rx_active = false;
+#endif
 			sink_lost(DMR_AMBE_FRAMES_PER_BURST);
 			if (s.have_index)
 				s.next_index = (uint8_t)((s.next_index + 1) % 6);
@@ -2016,8 +2137,19 @@ void dmr_call_stop(void)
 	s.dirty = true;
 }
 
+#ifdef RF_DMR_AES_TX
+void dmr_call_require_aes_tx(bool required)
+{
+	s.aes_tx_required = required;
+}
+#endif
+
 void dmr_call_ptt(bool down)
 {
+#ifdef RF_DMR_AES_TX
+	if (!down)
+		s.aes_tx_required = false;
+#endif
 	s.ptt = down;
 }
 
@@ -2223,6 +2355,10 @@ void dmr_call_set_data_rx(dmr_data_rx_fn fn, void *ctx)
 
 bool dmr_call_data_tx(const dmr_data_source_t *src)
 {
+#ifdef RF_DMR_AES_TX
+	if (s.cfg.aes_rx_enabled)
+		return false;	// no clear packets on the AES bench channel
+#endif
 	if (!s.modem || !s.running || !s.configured || s.tx != TX_NONE || s.ptt || s.data_active || src == NULL ||
 	    src->next == NULL)
 		return false;

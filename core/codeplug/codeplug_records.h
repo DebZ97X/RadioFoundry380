@@ -96,11 +96,14 @@ int codeplug_target(codeplug_ref_t ref, uint8_t kind, codeplug_rec_head_t *h, ui
 // List ref of kind: its header in *h and up to max of its references into refs; how many it holds, -1 when it doesn't
 // resolve. Each reference resolves (or not) on its own: a list outlives a target deleted from under it
 int codeplug_target_list(codeplug_ref_t ref, uint8_t kind, codeplug_rec_head_t *h, codeplug_ref_t *refs, uint16_t max);
+// A reference from the 4 octets a record stores
+codeplug_ref_t codeplug_ref_at(const uint8_t *p);
+#endif
+
+#if CODEPLUG_MODE_RECORDS || defined(RF_DMR_AES_RX)
 // The traffic key of system with this algorithm and key id: its octets into key (at most cap); their length, -1 when
 // there is none
 int codeplug_traffic_key(uint8_t system, uint8_t alg, uint16_t key_id, uint8_t *key, uint16_t cap);
-// A reference from the 4 octets a record stores
-codeplug_ref_t codeplug_ref_at(const uint8_t *p);
 #endif
 
 #endif

@@ -161,6 +161,9 @@ typedef struct {
 	// Writes val when write, then sets *val to the register as read back (a write-only register: the value written).
 	// False for a chip, page or register it doesn't offer. NULL: none
 	bool (*chip_reg)(uint8_t chip, uint8_t page, uint8_t reg, uint32_t *val, bool write);
+#ifdef RF_DMR_AES_TX
+	bool (*random_word)(uint32_t *value);
+#endif
 
 	// Optional: hardware options a person states because software can't read them (hal_hwopt.h): Settings >
 	// Advanced > Hardware and the debug link's HWOPT. NULL / 0 = none. Only in a build whose board.mk says

@@ -23,6 +23,7 @@
 #endif
 #if CONFIG_DMR
 #include "dmr/call/dmr_call.h"
+#include "dmr/call/dmr_aes_rx.h"
 #include "dmr/ambe/ambeVoice.h"
 #include "codeplug/dmr_iddb.h"
 #endif
@@ -1464,8 +1465,19 @@ static bool key_tx(const radio_sm_t *sm, uint32_t hz, radio_bw_t bw, uint8_t pow
 	return board.radio->tx(hz, bw, power, tone);
 }
 
-static uint8_t tx_check(const radio_sm_t *sm)
+static uint8_t tx_check_mode(const radio_sm_t *sm, bool voice)
 {
+#ifdef RF_DMR_AES_RX
+	if (!sm->view.vfo && dmr_aes_rx_bound(sm->view.channel_number, sm->view.ch.name)) {
+#ifdef RF_DMR_AES_TX
+		// Only direct DMR voice may use this channel. The call layer must still acquire the key and an MI.
+		if (!voice || sm->view.ch.mode != RADIO_MODE_DMR || sm->view.ch.kind != CODEPLUG_KIND_NONE ||
+		    sm->view.ch.rx_hz != sm->view.ch.tx_hz || sm->hotspot || sm->host_audio)
+#endif
+			return TXDENY_RX_ONLY;
+	}
+#endif
+	(void)voice;
 	const channel_t *ch = &sm->view.ch;
 	// A trunked channel's frequencies are the system's: checked when it keys (p25t_tick, p25t_burst)
 	bool trunk = ch->kind == CODEPLUG_KIND_P25_TRUNK;
@@ -1517,6 +1529,11 @@ static uint8_t tx_check(const radio_sm_t *sm)
 		return TXDENY_BUSY;
 	}
 	return TXDENY_NONE;
+}
+
+static uint8_t tx_check(const radio_sm_t *sm)
+{
+	return tx_check_mode(sm, false);
 }
 
 // The board didn't key a frequency tx_check passed: a hardware option it still needs, or its own refusal (no
@@ -1749,6 +1766,12 @@ static void dmr_configure(radio_sm_t *sm)
 	}
 	cfg.ts = ts_override != 0 ? ts_override : (ch->timeslot == 2 ? 2 : 1);
 	cfg.rmo = ch->tx_hz != 0 && ch->rx_hz != ch->tx_hz && !ch->dmo;
+#ifdef RF_DMR_AES_RX
+	cfg.aes_rx_enabled = !sm->view.vfo && dmr_aes_rx_bound(sm->view.channel_number, ch->name);
+#endif
+#ifdef RF_DMR_AES_TX
+	cfg.aes_mi = board.random_word;
+#endif
 #if CONFIG_SFR
 	// A user of a single frequency repeater: the inbound slot and its sync, the copies heard (sfr.md 4)
 	sfrConfig_t sc;
@@ -2598,6 +2621,9 @@ static void dmr_ptt_down(radio_sm_t *sm, uint32_t now_ms)
 	dmr_gps_tx(sm, now_ms);
 #endif
 	sig_air_dmr(sm, SIG_EV_BEGIN);
+#ifdef RF_DMR_AES_TX
+	dmr_call_require_aes_tx(!sm->view.vfo && dmr_aes_rx_bound(sm->view.channel_number, ch->name));
+#endif
 	dmr_call_ptt(true);
 	dmr_call_poll(now_ms);
 	dmr_follow(sm, now_ms);
@@ -6921,7 +6947,7 @@ static void ptt_down(radio_sm_t *sm, uint32_t now_ms)
 	bool was_rx = sm->view.state == RS_RX;
 	end_reception(sm, now_ms);
 
-	uint8_t reason = tx_check(sm);
+	uint8_t reason = tx_check_mode(sm, true);
 	if (reason != TXDENY_NONE) {
 		if (reason == TXDENY_INHIBIT && !sm->set.tx_inhibit) {
 			tx_limit_refused(sm->view.ch.tx_hz);	// counted here: tx_check is also a plain test elsewhere

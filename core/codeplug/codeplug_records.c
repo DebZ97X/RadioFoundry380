@@ -6,13 +6,14 @@
 #include "codeplug/codeplug_tag.h"
 #include "codeplug/codeplug_kv.h"
 
+#if CODEPLUG_MODE_RECORDS || defined(RF_DMR_AES_RX)
+static uint16_t rec_rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
+#endif
+
 #if CODEPLUG_MODE_RECORDS
 
 #define TARGETS_MAX	0x0800u
 #define TLISTS_MAX	0x0100u
-#define TRAFFIC_MAX	0x0400u
-
-static uint16_t rec_rd16(const uint8_t *p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
 codeplug_ref_t codeplug_ref_at(const uint8_t *p)
 {
@@ -139,6 +140,11 @@ int codeplug_system_secret(uint8_t n, uint8_t *buf, uint16_t cap)
 {
 	return n == CODEPLUG_SYSTEM_NONE ? -1 : codeplug_kv_get((uint16_t)(CODEPLUG_KEY_SYS_KEY + n), buf, cap);
 }
+
+#endif
+
+#if CODEPLUG_MODE_RECORDS || defined(RF_DMR_AES_RX)
+#define TRAFFIC_MAX	0x0400u
 
 int codeplug_traffic_key(uint8_t system, uint8_t alg, uint16_t key_id, uint8_t *key, uint16_t cap)
 {

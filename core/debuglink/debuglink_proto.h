@@ -74,6 +74,7 @@ enum {
 	DL_CPKV_GET = 1,	// offset u16 -> length u16, the value from offset
 	DL_CPKV_SET = 2,	// offset u16, bytes: offset 0 sets the value, else patches it from offset
 	DL_CPKV_REMOVE = 3,
+	DL_CPKV_AES_RX_SET = 4, // channel u16, 32-byte key: provision and bind atomically
 };
 
 // DL_CMD_AIR operations (first payload byte; docs/spec/debuglink.md 3.28). Little endian

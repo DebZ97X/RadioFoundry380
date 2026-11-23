@@ -25,6 +25,7 @@
 #define CODEPLUG_KEY_T3_POLL	0x0800u		// the short data poll setting and reply, 0x0800-0x08FF
 #define CODEPLUG_KEY_T3_SUPL	0x0900u		// the supplementary user data the radio offers, 0x0900-0x09FF
 #define CODEPLUG_KEY_SIG_BEGIN	0x0007u		// record: the signaling tone of a transmission's start (radio/sigtone.h SIG_REC_LEN)
+#define CODEPLUG_KEY_DMR_AES_RX	0x000Au	// bench RX: channel number and name check, two u16 LE
 #define CODEPLUG_KEY_SIG_END	0x0008u		// record: ... of its end
 #define CODEPLUG_KEY_SIG_IDLE	0x0009u		// record: ... of a reception's end
 

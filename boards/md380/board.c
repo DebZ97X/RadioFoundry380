@@ -92,6 +92,25 @@ static bool hw_line(uint8_t i, uint8_t *role, char *buf, uint8_t len)
 	return true;
 }
 
+#ifdef RF_DMR_AES_TX
+static bool random_word(uint32_t *value)
+{
+	RCC->AHB2ENR |= RCC_AHB2ENR_RNGEN;
+	(void)RCC->AHB2ENR;
+	RNG->CR |= RNG_CR_RNGEN;
+	for (unsigned wait = 0; wait < 4096; wait++) {
+		uint32_t status = RNG->SR;
+		if (status & (RNG_SR_CECS | RNG_SR_SECS | RNG_SR_CEIS | RNG_SR_SEIS))
+			return false;
+		if (status & RNG_SR_DRDY) {
+			*value = RNG->DR;
+			return true;
+		}
+	}
+	return false;
+}
+#endif
+
 const board_t board = {
 	.name = BOARD_NAME,
 	// CAP_GPS: the G models; board_t.gps says whether this one has the module (hardware-md380.md 13). No
@@ -112,6 +131,9 @@ const board_t board = {
 	.side_key_count = sizeof(side_keys),
 	.radio = &md380_radio,
 	.chip_reg = md380_chip_reg,
+#ifdef RF_DMR_AES_TX
+	.random_word = random_word,
+#endif
 	.hw_line = hw_line,
 	.power = &md380_power,
 	.flash = &stm32_spi_flash,

@@ -53,7 +53,16 @@ endif
 # What the board or platform lists as unsupported or not written is off by default: the list is enough, no
 # CONFIG_X ?= n beside it (docs/build-config.md). A command-line CONFIG_X=y still builds it
 $(foreach f,$(sort $(BOARD_UNSUPPORTED) $(BOARD_NOT_WRITTEN)),$(eval CONFIG_$(f) ?= n))
+ifeq ($(BOARD):$(DMR_AES),md380:y)
+override CONFIG_DMR_PRIVACY := n
+endif
 include config/features.mk
+# The MD-380 AES voice build uses the USB-provisioned traffic key.
+ifeq ($(BOARD):$(DMR_AES),md380:y)
+ifneq ($(CONFIG_DMR),y)
+$(error DMR_AES=y requires CONFIG_DMR=y)
+endif
+endif
 include platform/$(PLATFORM)/platform.mk
 
 # Hardware build options: hardware versions one image can't serve (a radio sold with UHF and VHF boards). board.mk names
@@ -299,6 +308,9 @@ STACK_INFO := -fcallgraph-info=su
 COMMON := $(CPUFLAGS) $(OPT) -g3 -ffunction-sections -fdata-sections -fno-common -MMD -MP $(STACK_INFO)
 CFLAGS_APP := $(COMMON) -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wshadow -Wdouble-promotion $(DEFS) $(INCLUDES)
 CFLAGS_3P := $(COMMON) -std=gnu11 -w $(DEFS) $(INCLUDES)
+ifeq ($(BOARD):$(DMR_AES),md380:y)
+CFLAGS_APP += -DRF_DMR_AES_RX -DRF_DMR_AES_TX
+endif
 # The C library flavor and linker extras come from the platform (platform.mk); these are the arm-none-eabi ones
 LDSPECS ?= --specs=nano.specs --specs=nosys.specs -Wl,--no-warn-rwx-segments
 # The image address (board.mk APP_BASE) reaches the linker scripts as __app_base, and the application's first byte, after

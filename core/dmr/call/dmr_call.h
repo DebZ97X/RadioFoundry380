@@ -114,6 +114,12 @@ typedef struct {
 	uint8_t tx_svc;			// voice LC service options (privacy bit, emergency, priority)
 	dmr_privacy_fn privacy;		// NULL = none: bursts with PI set are not played
 	void *privacy_ctx;
+#ifdef RF_DMR_AES_RX
+	bool aes_rx_enabled;
+#endif
+#ifdef RF_DMR_AES_TX
+	bool (*aes_mi)(uint32_t *mi);
+#endif
 	char tx_alias[DMR_TA_TEXT_MAX + 1];	// our talker alias, "" = none (CONFIG_DMR_TALKER_ALIAS)
 	uint8_t tx_alias_format;	// DMR_TA_7BIT or DMR_TA_ISO8
 	// A user of a single frequency repeater (CONFIG_SFR, docs/spec/sfr.md 4; never with rmo): ts is the inbound slot.
@@ -243,6 +249,10 @@ bool dmr_call_start(void);
 // Leaving DMR: abort any call and stop the modem
 void dmr_call_stop(void);
 
+#ifdef RF_DMR_AES_TX
+// The current programmed channel is bound to AES. Set immediately before PTT.
+void dmr_call_require_aes_tx(bool required);
+#endif
 void dmr_call_ptt(bool down);
 // Through a repeater, receive its outbound between our bursts (the modem's tx_listen_split) and wake it again when it drops
 // under our over (DMR_CALL_TX_DROP_MS). Default DMR_CALL_TX_LISTEN
