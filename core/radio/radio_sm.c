@@ -1186,6 +1186,10 @@ static void follow_channel_switch(radio_sm_t *sm, uint32_t now_ms)
 		return;
 	}
 
+#if CONFIG_DMR
+	bool was_dmr = sm->view.ch.mode == RADIO_MODE_DMR;
+	uint32_t rx_hz = sm->view.ch.rx_hz;
+#endif
 	channel_t ch;
 	if ((uint16_t)pos < sm->zone.count && channel_read(sm->zone.channels[pos], &ch)) {
 		set_channel(sm, (uint16_t)pos, &ch);
@@ -1199,6 +1203,10 @@ static void follow_channel_switch(radio_sm_t *sm, uint32_t now_ms)
 		load_channel(sm, &empty);
 	}
 	tune(sm, now_ms);
+#if CONFIG_DMR
+	if (was_dmr && sm->view.ch.mode == RADIO_MODE_DMR && sm->view.ch.rx_hz == rx_hz)
+		dmr_call_recheck_selected_channel();
+#endif
 }
 
 static bool read_zone(uint16_t index, zone_t *z)
@@ -1808,6 +1816,8 @@ static void dmr_configure(radio_sm_t *sm)
 	cfg.listen.hear_all = sm->view.monitor || hear_all_on(sm);
 	// Digital monitor hears everything on the frequency: any color code, either timeslot (dmr-voice.md 1)
 	cfg.listen.any_cc = cfg.listen.both_ts = cfg.listen.hear_all;
+	cfg.tx_other_group = cfg.rmo && !sm->view.vfo && ch->kind == CODEPLUG_KIND_NONE &&
+		!sm->one_shot && !sm->manual && !sm->temp_ts;
 	cfg.listen.groups = sm->listen;
 	cfg.listen.group_count = sm->listen_count;
 	cfg.listen.accept_bad_crc = ch->accept_bad_crc;

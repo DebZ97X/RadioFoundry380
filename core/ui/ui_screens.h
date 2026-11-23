@@ -110,6 +110,7 @@ typedef struct {
 	uint8_t diag_first;	// first board line on the diagnostics page
 	bool locked;		// keys locked (long QUICK)
 	bool scanning;
+	bool channel_preview;	// briefly show the selected preset during a received call
 	uint8_t usb_net;	// UI_USB_NET_*: the status strip's USB network word and link arrows
 	uint8_t gps;		// UI_GPS_*: the status strip's GPS icon
 	bool hints;		// the hint row is shown (Settings > Display)

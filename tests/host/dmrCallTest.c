@@ -1973,7 +1973,23 @@ static void test_rx_recheck_on_configure(void)
 	dmr_call_poll(now);
 	CHECK(V()->phase == DMR_CALL_PHASE_RX_VOICE && sink_log.ends == 0);
 
+	// A manual preset change mutes the old group but tracks it until we turn back.
+	dmr_call_recheck_selected_channel();
+	dmr_call_poll(now);
+	CHECK(V()->phase == DMR_CALL_PHASE_RX_BUSY && sink_log.ends == 1 && V()->caller.dst == 1234);
+	rx_voice(0, 1, 0, DMR_SYNC_MS, &frame, NULL, false);
+	run_ms(60);
+	CHECK(sink_log.frames == 18);
+	c.talk_target.id = 1234;
+	dmr_call_configure(&c);
+	dmr_call_recheck_selected_channel();
+	dmr_call_poll(now);
+	rx_voice(1, 1, 0, DMR_SYNC_MS, &frame, NULL, false);
+	run_ms(60);
+	CHECK(V()->phase == DMR_CALL_PHASE_RX_VOICE && sink_log.begins == 2 && sink_log.frames == 21);
+
 	// A color code change is a new channel: the call ends, nothing is rechecked
+	c.talk_target.id = TG_TALK;
 	setup(&c);
 	rx_call(lc, 1, true, 0, 1, false, &frame);
 	c.cc = 2;
@@ -1981,6 +1997,30 @@ static void test_rx_recheck_on_configure(void)
 	dmr_call_configure(&c);
 	dmr_call_poll(now);
 	CHECK(V()->phase != DMR_CALL_PHASE_RX_VOICE && sink_log.begins == 0);
+}
+
+static void test_duplex_other_group_ptt(void)
+{
+	for (unsigned i = 0; i < 3; i++) {
+		dmr_call_config_t c = base_cfg();
+		c.rmo = i != 2;
+		c.tx_other_group = true;
+		setup(&c);
+		sim.repeater = c.rmo;
+		uint8_t lc[9];
+		mk_lc(lc, 0, i == 1 ? TG_TALK : 1234, 9997030);
+		rx_header(lc, 1, 1, c.rmo ? DMR_SYNC_BS : DMR_SYNC_MS, false);
+		run_ms(60);
+		CHECK(V()->phase == (i == 1 ? DMR_CALL_PHASE_RX_VOICE : DMR_CALL_PHASE_RX_BUSY));
+		dmr_call_ptt(true);
+		run_ms(10);
+		if (i == 0) {
+			CHECK(V()->phase == DMR_CALL_PHASE_TX_VOICE && sim.last_timing == DMR_TIMING_ALIGNED);
+			CHECK(V()->tx_target.id == TG_TALK);
+		} else {
+			CHECK(sim.tx_begins == 0);
+		}
+	}
 }
 
 static void test_rx_filters(void)
@@ -3473,6 +3513,7 @@ int main(void)
 	test_rx_call();
 	test_rx_filters();
 	test_rx_recheck_on_configure();
+	test_duplex_other_group_ptt();
 	test_rx_no_call_after_terminator();
 	test_slot_change_keeps_modem();
 	test_rx_group_callback();

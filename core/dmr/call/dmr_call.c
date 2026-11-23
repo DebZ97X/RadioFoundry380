@@ -1241,8 +1241,15 @@ static bool voice_channel_busy(uint32_t now)
 	bool call = s.rx != RXC_NONE && !(s.rx == RXC_OTHER && s.rx_echo);
 
 	switch (s.cfg.access) {
-	case DMR_ACCESS_POLITE_CC:
-		return call;
+	case DMR_ACCESS_POLITE_CC: {
+		// Other group traffic is on the repeater output. Keep slot-aligned TX and target the selected group.
+		dmr_target_t target = effective_target(now);
+		bool other = s.cfg.rmo && s.cfg.tx_other_group && s.rx == RXC_OTHER &&
+			     s.view.caller.group && !s.view.caller.encrypted && !target.private_call &&
+			     target.id != 0 && target.id == s.cfg.talk_target.id &&
+			     !group_listened(s.view.caller.dst, now);
+		return call && !other;
+	}
 	case DMR_ACCESS_POLITE_ALL:
 		return call || !elapsed(now, s.last_any_ms, s.any_seen, DMR_CALL_LBT_DMO_MS);
 	default:
@@ -1975,6 +1982,21 @@ void dmr_call_configure(const dmr_call_config_t *cfg)
 		modem_apply();
 	if (!rf_change && s.rx == RXC_OTHER)
 		rx_recheck(s.now);
+}
+
+void dmr_call_recheck_selected_channel(void)
+{
+	// Keep tracking the call so turning back can resume without another LC.
+	if (s.rx != RXC_PLAY || !s.view.caller.group || s.view.caller.encrypted ||
+	    group_listened(s.view.caller.dst, s.now))
+		return;
+
+	dual_flush();
+	if (s.sink && s.sink->end)
+		s.sink->end(s.sink->ctx);
+	s.rx = RXC_OTHER;
+	s.have_index = false;
+	s.dirty = true;
 }
 
 bool dmr_call_start(void)

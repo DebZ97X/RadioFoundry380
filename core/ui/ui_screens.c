@@ -2100,6 +2100,13 @@ static void draw_dmr_call(const radio_view_t *v, const ui_state_t *s)
 		TR(CALL_WHY_ENCRYPTED, "Encrypted: not played") :
 		TR(CALL_WHY_OTHER_TG, "Other TG: not played")) : !d->codec ? TR(WHY_NO_CODEC, "No codec: voice off") :
 			NULL;
+	if (d->state == RDMR_RX_OTHER && d->call.group && !d->call.encrypted && d->call.dst != 0) {
+		sb_init(&b, buf, sizeof buf);
+		sb_str(&b, TR(VOL_VALUE_MUTED, "Muted"));
+		sb_str(&b, ": TG ");
+		sb_u32(&b, d->call.dst, 1);
+		why = buf;
+	}
 	if (why != NULL) {
 		y = call_line(L->small, y, why, ui_col.warn);
 	} else {
@@ -2432,7 +2439,7 @@ void ui_draw_home(const radio_view_t *v, const ui_state_t *s)
 #endif
 #if CONFIG_DMR
 	ui_st_dmr_off = s->dmr_off;
-	if (dmr_call_screen(v)) {
+	if (dmr_call_screen(v) && (!s->channel_preview || v->state == RS_TX)) {
 		draw_dmr_call(v, s);
 		ui_draw_banner(s);
 		if (s->toast != NULL)

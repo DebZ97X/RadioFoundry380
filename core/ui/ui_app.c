@@ -2443,6 +2443,29 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 #endif
 	now = now_ms;
 	ui_st.now_ms = now_ms;
+#if CONFIG_DMR
+	static uint16_t preview_zone, preview_pos;
+	static uint32_t preview_ms;
+	static bool preview_tracking;
+	bool track = board.input != NULL && board.input->position_locked &&
+		     stack[sp].scr == SCR_HOME && !v->vfo && v->scan == 0;
+	bool preview = ui_st.channel_preview;
+	if (!track || !preview_tracking || preview_zone != v->zone_index) {
+		preview = false;
+	} else if (preview_pos != v->zone_pos) {
+		preview_ms = now_ms;
+		preview = true;
+	} else if (preview && now_ms - preview_ms >= 1000u) {
+		preview = false;
+	}
+	preview_tracking = track;
+	preview_zone = v->zone_index;
+	preview_pos = v->zone_pos;
+	if (preview != ui_st.channel_preview) {
+		ui_st.channel_preview = preview;
+		dirty = true;
+	}
+#endif
 #if CONFIG_VOLUME_BAR
 	knob_tick(v);
 #endif
