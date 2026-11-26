@@ -272,6 +272,11 @@ is on, the reply window lets you answer any call you heard with **PTT**. **PTT**
 timeslot and color code, so a call heard on another one doesn't hear the reply. While digital monitor plays a call on
 the other timeslot, the channel counts as busy.
 
+On a duplex hotspot or repeater, changing to another programmed talkgroup on the same receive frequency
+can mute the previous group. With color-code polite access, an unrelated clear group that is muted does
+not prevent transmitting to the newly selected preset group.
+
+
 On a [Tier III trunked channel](#setting-one-up) digital monitor follows calls on every talkgroup of the system, not
 only the channel's RX group list. It still plays only the system's calls, on their own timeslot. While it plays one,
 **PTT** talks on that call, as on any call the radio follows (not on a broadcast or an all-call someone else made).

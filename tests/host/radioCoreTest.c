@@ -172,7 +172,9 @@ static void p_led(uint8_t which, bool on) { hw.led[which] = on; }
 
 static bool ptt_stuck;
 static bool p_ptt_stuck(void) { return ptt_stuck; }
-static const hal_input_t fake_input = { .ptt_line_stuck = p_ptt_stuck };
+static int8_t knob_pos = -1;
+static int8_t fake_position(void) { return knob_pos; }
+static hal_input_t fake_input = { .ptt_line_stuck = p_ptt_stuck, .position = fake_position };
 
 // ---- fake PCM audio and vocoder (core/dmr/ambe runs on them) ----
 static struct {
@@ -4258,6 +4260,7 @@ static bool ptt_blocked;
 void input_set_ptt_block(bool b) { ptt_blocked = b; }
 static bool dtmf_blocked;
 void input_set_dtmf_block(bool b) { dtmf_blocked = b; }
+void input_switch_menu(bool active) { (void)active; }
 static keymap_entry_t got_keymap[4];
 static int keymap_sets;
 void input_set_keymap(const keymap_entry_t *map) { memcpy(got_keymap, map, sizeof(got_keymap)); keymap_sets++; }
@@ -4357,6 +4360,14 @@ static void test_ui_dual(void)
 	const ui_dual_ref_t pair[2] = { a, tones };
 	CHECK(ui_svc_dual(pair, 1) && sm.view.scan == SCAN_DUAL && sm.dual_sel == 1);
 	CHECK(ui_svc_dual(pair, 1) && sm.view.scan == SCAN_DUAL);	// again: nothing changes
+	// An absolute switch request must not retune either pane when the selected zone changes.
+	const radio_req_t switch_pos = { .type = RREQ_ZONE_POS, .arg = 4, .arg2 = 1 };
+	radio_sm_request(&sm, &switch_pos, now);
+	CHECK(sm.view.scan == SCAN_DUAL && sm.dual_sel == 1 && sm.dual[1].pos == 1);
+	CHECK(ui_svc_dual(pair, 0) && sm.dual_sel == 0);
+	radio_sm_request(&sm, &switch_pos, now);
+	CHECK(sm.view.scan == SCAN_DUAL && sm.dual[0].pos == 0 && sm.dual[1].pos == 1);
+	CHECK(ui_svc_dual(pair, 1) && sm.dual_sel == 1);
 	{
 		// The debug link's features section: the pair, the selected one, where the receiver is; it still fits a reply
 		static char buf[DL_REPLY_MAX - 6 - 16];
@@ -6289,6 +6300,99 @@ static void test_rx_ext(void)
 
 // ---- Error paths: the radio refuses to key, a channel without a TX frequency, retuning or scanning while
 // transmitting, the stack's own refusals, targets that end with their channel, stored emergency settings ----
+static void test_channel_selector(void)
+{
+	setup_codeplug();
+	start();
+	knob_pos = 1;
+	radio_sm_request(&sm, &(radio_req_t){ .type = RREQ_ZONE_POS, .arg = knob_pos, .arg2 = 1 }, now);
+	CHECK(sm.view.zone_pos == 1 && sm.view.channel_number == 2);
+
+	knob_pos = (int8_t)zones[0].count;
+	radio_sm_request(&sm, &(radio_req_t){ .type = RREQ_ZONE_POS, .arg = knob_pos, .arg2 = 1 }, now);
+	CHECK(sm.view.zone_pos == (uint16_t)knob_pos && sm.view.channel_number == 0);
+	req(RREQ_PTT, 1);
+	CHECK(sm.view.state == RS_TX_DENIED && sm.view.tx_deny == TXDENY_NO_FREQ && hw.tx_calls == 0);
+	req(RREQ_PTT, 0);
+
+	knob_pos = 0;
+	radio_sm_request(&sm, &(radio_req_t){ .type = RREQ_ZONE_POS, .arg = knob_pos, .arg2 = 1 }, now);
+	CHECK(sm.set.scan_stop_mode == RADIO_SCAN_STOP_STAY);
+	req(RREQ_SCAN, RSCAN_ZONE);
+	CHECK(sm.view.scan == SCAN_ZONE);
+	uint16_t scanned = sm.view.zone_pos;
+	knob_pos = scanned == 0 ? 1 : 0;
+	req(RREQ_SCAN, RSCAN_STOP);
+	CHECK(sm.view.scan == 0 && sm.view.zone_pos == scanned);
+
+	knob_pos = knob_pos == 0 ? 1 : 0;
+	radio_sm_request(&sm, &(radio_req_t){ .type = RREQ_ZONE_POS, .arg = knob_pos, .arg2 = 1 }, now);
+	CHECK(sm.view.zone_pos == (uint16_t)knob_pos && sm.view.channel_number == (uint16_t)knob_pos + 1);
+
+	radio_settings_t settings = sm.set;
+	settings.scan_stop_mode = RADIO_SCAN_STOP_KNOB;
+	radio_sm_set_settings(&sm, &settings, now);
+	req(RREQ_SCAN, RSCAN_ZONE);
+	CHECK(sm.view.scan == SCAN_ZONE);
+	scanned = sm.view.zone_pos;
+	knob_pos = scanned == 0 ? 1 : 0;
+	req(RREQ_SCAN, RSCAN_STOP);
+	CHECK(sm.view.scan == 0 && sm.view.zone_pos == (uint16_t)knob_pos);
+
+	req(RREQ_SCAN, RSCAN_ZONE);
+	scanned = sm.view.zone_pos;
+	knob_pos = scanned == 0 ? 1 : 0;
+	req(RREQ_SCAN, RSCAN_STAY);
+	CHECK(sm.view.scan == 0 && sm.view.zone_pos == scanned);
+
+	for (unsigned return_to_knob = 0; return_to_knob <= 1; return_to_knob++) {
+		settings.scan_stop_mode = return_to_knob ? RADIO_SCAN_STOP_KNOB : RADIO_SCAN_STOP_STAY;
+		radio_sm_set_settings(&sm, &settings, now);
+		req(RREQ_SCAN, RSCAN_ZONE);
+		CHECK(sm.view.scan == SCAN_ZONE);
+		scanned = sm.view.zone_pos;
+		knob_pos = scanned == 0 ? 1 : 0;
+		req(RREQ_VFO, 1);
+		CHECK(sm.view.vfo && sm.view.scan == 0);
+		req(RREQ_VFO, 0);
+		CHECK(!sm.view.vfo && sm.view.zone_pos == (return_to_knob ? (uint16_t)knob_pos : scanned));
+	}
+
+	req(RREQ_SCAN, RSCAN_ZONE);
+	CHECK(sm.view.scan == SCAN_ZONE);
+	knob_pos = (int8_t)zones[0].count;
+	req(RREQ_VFO, 1);
+	CHECK(sm.view.vfo && sm.view.scan == 0);
+	req(RREQ_VFO, 0);
+	CHECK(!sm.view.vfo && sm.view.zone_pos == (uint16_t)knob_pos && sm.view.channel_number == 0);
+	// Last hit: a real FM hold, then let the sweep move on before stopping.
+	add(2, "Scan hit", 146550000, RADIO_MODE_FM, false, CODEPLUG_POWER_DEFAULT);
+	zones[0].count = 2;
+	req(RREQ_RELOAD, 0);
+	req(RREQ_ZONE_POS, 0);
+	settings.scan_stop_mode = RADIO_SCAN_STOP_LAST_HIT;
+	radio_sm_set_settings(&sm, &settings, now);
+	req(RREQ_SCAN, RSCAN_ZONE);
+	for (unsigned i = 0; i < 300 && sm.view.channel_number != 2; i++)
+		poll_for(RADIO_POLL_MS);
+	rx_signal(1, true);
+	poll_for(100);
+	CHECK(sm.view.channel_number == 2 && sm.view.scan_phase == SCAN_PH_HOLD);
+	rx_signal(120, false);
+	for (unsigned i = 0; i < 1000 && sm.view.channel_number != 1; i++)
+		poll_for(RADIO_POLL_MS);
+	CHECK(sm.view.scan == SCAN_ZONE && sm.view.channel_number == 1);
+	req(RREQ_SCAN, RSCAN_STOP);
+	CHECK(sm.view.scan == 0 && sm.view.channel_number == 2);
+
+	// A new scan starts with no remembered hit.
+	req(RREQ_SCAN, RSCAN_ZONE);
+	scanned = sm.view.zone_pos;
+	req(RREQ_SCAN, RSCAN_STOP);
+	CHECK(sm.view.scan == 0 && sm.view.zone_pos == scanned);
+	knob_pos = -1;
+}
+
 static void test_error_paths(void)
 {
 	// The squelch threshold's ends
@@ -11855,6 +11959,7 @@ int main(void)
 	test_soft_volume();
 	test_side_keys();
 	test_rx_ext();
+	test_channel_selector();
 	test_error_paths();
 	test_ptt_line_stuck();
 	test_hotspot();

@@ -133,7 +133,8 @@ bool ui_svc_zone_pending(void);
 bool ui_svc_save_talk_target(uint32_t id, bool private_call);
 
 // --- Scan (radio-features). Whether a scan runs is radio_view_t.scan ---
-bool ui_svc_scan(bool on);			// on: the zone (in the VFO: the band); off: stop where it is
+bool ui_svc_scan(bool on);			// on: start zone or VFO scan; off: use Scan Stop preference
+void ui_svc_scan_stay(void);			// explicitly stay on the scanned channel
 bool ui_svc_scan_skip(void);			// nuisance delete of the channel that stopped the scan
 // Dual watch (docs/ux/dual-watch.md): two channels, each a channel of any zone or the VFO. ref[sel] is the selected
 // one: PTT transmits on it (and the watch goes on after), keys and quick settings act on it. NULL refs stop the
@@ -196,6 +197,7 @@ void ui_svc_dtmf_block(bool blocked);
 // Keys locked with Settings > Key lock > Knob when locked Off: the radio holds its level and ignores the volume knob; false
 // follows the knob again. Weak no-op without the radio core
 void ui_svc_volume_hold(bool hold);
+void ui_svc_switch_menu(bool active);		// whether an open screen owns the channel switch
 
 // --- Messages and signaling (dmr-data) ---
 #define UI_MSG_TEXT_MAX	143
@@ -459,6 +461,7 @@ typedef enum {
 	// One step of a chain, set whole (its frequency and length in one write of the settings area): the value is
 	// UI_SIG_STEP(event, step, Hz, ms). Write only
 	UI_SET_SIG_STEP,
+	UI_SET_SCAN_STOP,	// zone scan stop: RADIO_SCAN_STOP_*
 	UI_SET_COUNT
 } ui_setting_t;
 

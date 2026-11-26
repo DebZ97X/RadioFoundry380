@@ -3965,6 +3965,21 @@ msgid "Language"
 msgstr "语言"
 
 #: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_STAY"
+msgid "Scan Position"
+msgstr "扫描位置"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_RETURN_KNOB"
+msgid "Knob Position"
+msgstr "旋钮位置"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_LAST_HIT"
+msgid "Last Hit"
+msgstr "最近活动"
+
+#: core/ui/ui_menus.c
 msgctxt "SET_LABEL_REPLY_WINDOW"
 msgid "Reply window"
 msgstr "回复窗口"
@@ -4023,6 +4038,11 @@ msgstr "双守候回话"
 msgctxt "SET_LABEL_DUAL_DELAY"
 msgid "Dual watch delay"
 msgstr "双守候延时"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_LABEL_SCAN_STOP"
+msgid "Scan Stop"
+msgstr "扫描停止"
 
 #: core/ui/ui_menus.c
 msgctxt "SET_LABEL_SFR_RECEIVE"
@@ -4765,6 +4785,11 @@ msgid "ROAM"
 msgstr "漫游"
 
 #: core/ui/ui_screens.c
+msgctxt "CHANNEL_UNPROGRAMMED"
+msgid "Unprogrammed"
+msgstr "未设置"
+
+#: core/ui/ui_screens.c
 msgctxt "HOME_STATE_P25T_HUNT"
 msgid "Finding system"
 msgstr "搜索中"
@@ -5305,6 +5330,11 @@ msgid "Other TG: not played"
 msgstr "其他通话组：不播放"
 
 #: core/ui/ui_screens.c
+msgctxt "VOL_VALUE_MUTED"
+msgid "Muted"
+msgstr "已静音"
+
+#: core/ui/ui_screens.c
 msgctxt "CALL_HINT_MON_DMON"
 msgid "MON: digital monitor"
 msgstr "MON：数字监听"
@@ -5493,11 +5523,6 @@ msgstr "OK 确认  返回 隐藏"
 msgctxt "VOL_LABEL_SHORT"
 msgid "Vol"
 msgstr "音量"
-
-#: core/ui/ui_screens.c
-msgctxt "VOL_VALUE_MUTED"
-msgid "Muted"
-msgstr "已静音"
 
 #: core/ui/ui_screens.c
 msgctxt "VOL_HINT"

@@ -1526,6 +1526,26 @@ static void test_bs_direct_answer_dwell(void)
 	CHECK(count_writes(0, 0x10) == 0);
 }
 
+static void test_retune_reopens_lc_acquisition(void)
+{
+	hrc5000_attach(&c5, &bus, false);
+	hrc6000_dmr_init(&eng, hrc5000_hrc(&c5), &ops_found);
+	hrc6000_dmr_rx_lock_slot(&eng, 1);
+	eng.heard_any = eng.scap_valid = eng.pa_any = eng.pa_new = true;
+	eng.resume_reads = 2;
+	uint32_t restarts = eng.st.rx_restarts;
+
+	hrc6000_dmr_rx_lock_slot(&eng, 1);
+	CHECK(eng.heard_any && eng.pa_new);
+	hrc6000_dmr_rx_lock_slot(&eng, 2);
+	CHECK(!eng.heard_any && !eng.scap_valid && !eng.pa_any && !eng.pa_new && eng.resume_reads == 0);
+	CHECK(eng.lock_ts == 2 && eng.st.rx_restarts == restarts);
+
+	eng.heard_any = eng.scap_valid = eng.pa_any = eng.pa_new = true;
+	hrc6000_dmr_rx_restart(&eng);
+	CHECK(!eng.heard_any && !eng.scap_valid && !eng.pa_any && !eng.pa_new);
+}
+
 int main(void)
 {
 	test_chip();
@@ -1540,6 +1560,7 @@ int main(void)
 	test_tick_rx_stale_post_access();
 	test_repeater_slot();
 	test_two_slots();
+	test_retune_reopens_lc_acquisition();
 	test_tx_listen_rc_field();
 	printf("hrc5000Test: %s (%d failures)\n", failures ? "FAILED" : "passed", failures);
 	return failures ? 1 : 0;

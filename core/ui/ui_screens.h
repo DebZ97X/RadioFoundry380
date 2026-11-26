@@ -53,6 +53,7 @@ typedef struct {
 typedef struct {
 	bool vfo;		// the VFO, not a channel
 	uint16_t number;	// codeplug channel number (0: the VFO)
+	uint16_t zone_slot;	// one-based position in this pane's zone
 	uint8_t mode;		// radio_mode_t
 	bool am;		// an FM channel (or the VFO) received in AM: the air band (radio_am_channel)
 	uint32_t rx_hz;
@@ -110,6 +111,7 @@ typedef struct {
 	uint8_t diag_first;	// first board line on the diagnostics page
 	bool locked;		// keys locked (long QUICK)
 	bool scanning;
+	bool channel_preview;	// briefly show the selected preset during a received call
 	uint8_t usb_net;	// UI_USB_NET_*: the status strip's USB network word and link arrows
 	uint8_t gps;		// UI_GPS_*: the status strip's GPS icon
 	bool hints;		// the hint row is shown (Settings > Display)

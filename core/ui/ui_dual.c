@@ -8,6 +8,7 @@
 #include "config.h"
 #if CONFIG_DUAL_WATCH
 #include <string.h>
+#include "board.h"
 #include "ui_nav.h"
 #include "ui_svc.h"
 #include "fmt.h"
@@ -173,13 +174,20 @@ static uint8_t tuned_pane(const radio_view_t *v)
 }
 
 // The mode a channel runs in: a stored channel of a kind keeps DMR in its record (channel-modes.md 2), its kind's mode
-// is the one shown. A Tier III channel runs on its record's DMR
+// is the one shown. Tier III and AES channels run on their record's DMR
 static uint8_t shown_mode(const channel_t *c)
 {
-	if (!codeplug_kind_built(c->kind) || c->kind == CODEPLUG_KIND_DMR_TRUNK)
+	if (!codeplug_kind_built(c->kind))
 		return c->mode;
-	// The other kinds a build runs: P25 (trunked too) and NXDN
-	return c->kind == CODEPLUG_KIND_NXDN ? RADIO_MODE_NXDN : RADIO_MODE_P25;
+	switch (c->kind) {
+	case CODEPLUG_KIND_P25:
+	case CODEPLUG_KIND_P25_TRUNK:
+		return RADIO_MODE_P25;
+	case CODEPLUG_KIND_NXDN:
+		return RADIO_MODE_NXDN;
+	default:
+		return c->mode;
+	}
 }
 
 static void pane_fill(uint8_t i)
@@ -208,6 +216,7 @@ static void pane_fill(uint8_t i)
 		if (!codeplug_zone(ref[i].zone, &z) || ref[i].pos >= z.count || !codeplug_channel(z.channels[ref[i].pos], &ch))
 			return;
 		p->number = z.channels[ref[i].pos];
+		p->zone_slot = ref[i].pos + 1u;
 		strcpy(p->zone, z.name);
 		strcpy(p->name, ch.name);
 	}
@@ -707,14 +716,24 @@ bool ui_dual_home_key(const input_event_t *ev)
 	case ACT_NAV_DOWN:
 		if (!nav || ui_st.entry)
 			return false;
-		if (ui_st.updown == 1)	// Settings > Keys > Up/Down: Zone
-			ui_dual_zone_step(ev->action == ACT_NAV_UP ? 1 : -1);
-		else
+		if (ui_st.updown == 1) {	// Settings > Keys > Up/Down: Zone
+			int dir = ev->action == ACT_NAV_UP ? 1 : -1;
+			// With the knob selecting slots, Down moves forward through the zone list.
+			ui_dual_zone_step(board.input != NULL && board.input->position != NULL ? -dir : dir);
+		} else {
 			step_selected(ev->action == ACT_NAV_UP ? 1 : -1);
+		}
 		return true;
 	case ACT_ENC_STEP:
 		if (ui_st.entry)
 			return false;
+		if (ev->slot != 0 && !ref[d->sel].vfo) {
+			ui_dual_ref_t next = ref[d->sel];
+			next.pos = ev->slot - 1;
+			if (!ref_same(&next, &ref[d->sel]))
+				set_pane(d->sel, &next);
+			return true;
+		}
 		for (int n = ev->value < 0 ? -ev->value : ev->value; n > 0; n--)
 			step_selected(ev->value > 0 ? 1 : -1);
 		return true;

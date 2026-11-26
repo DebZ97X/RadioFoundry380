@@ -42,6 +42,13 @@ If dual watch is running, starting a scan stops it. The radio stays on the selec
 
 <img src="../ux/screens/160x120i5/scan_actions.png" width="200" alt="Scan actions">
 
+On radios with a physical channel-position selector, **Settings > Talk & Listen > Scan Stop** controls
+where a manual zone scan stop leaves you. **Scan Position** (default) keeps the scanned channel until
+you turn the knob. **Knob Position** selects the physical slot immediately. **Last Hit** returns to the last
+channel that held the current scan, even after scanning resumes. With no hit, it stays on the current
+channel. If you switch to VFO during
+a zone scan, the same setting determines which memory slot is restored when you exit VFO.
+
 The scan actions:
 
 | # | Action | Does |

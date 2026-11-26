@@ -27,6 +27,12 @@ PTT always uses.
 
 A call that doesn't pass is shown as busy ("not played") while it lasts, and counts for polite channel access.
 
+On a programmed conventional repeater channel, color-code polite access allows a preset group call when the
+only received call is an unencrypted group outside the selected channel’s listen rules. This applies to a
+fixed group target and keeps the selected slot aligned. A physical channel-position change on the same receive
+frequency rechecks an ongoing clear group call so it can mute or play as the selected group changes.
+
+
 A voice LC header or terminator whose RS(12,9) check fails is not taken. With the channel's Accept invalid CRC
 (`dmr_listen_filter_t.accept_bad_crc`, [open-firmware-cps.md](open-firmware-cps.md) 7.3.3) it is taken when the same
 9 LC octets failed among the last four failures (`core/fec/rx_seen.h`): a system that sends every LC that way repeats

@@ -115,6 +115,7 @@ typedef struct {
 	uint8_t cc;			// 0-15
 	uint8_t ts;			// 1 or 2
 	bool rmo;			// through a repeater (BS sync, BS activation, terminators not trusted for call end)
+	bool tx_other_group;		// allow a fixed preset group to key over a filtered duplex downlink
 	dmr_target_t talk_target;
 	dmr_listen_filter_t listen;
 	dmr_access_t access;		// voice PTT policy
@@ -264,6 +265,7 @@ void dmr_call_init(const hal_dmr_modem_t *modem);
 void dmr_call_set_voice(const dmr_voice_sink_t *sink, const dmr_voice_source_t *source);
 // Apply a channel / talk target / filter. A change of CC, TS or RMO ends any call in progress
 void dmr_call_configure(const dmr_call_config_t *cfg);
+void dmr_call_recheck_selected_channel(void);
 // The board's RF side is in DMR mode: start the modem (false if it can't)
 bool dmr_call_start(void);
 // Leaving DMR: abort any call and stop the modem

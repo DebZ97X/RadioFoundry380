@@ -3963,6 +3963,21 @@ msgid "Language"
 msgstr "Langue / Language"
 
 #: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_STAY"
+msgid "Scan Position"
+msgstr "Position du balayage"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_RETURN_KNOB"
+msgid "Knob Position"
+msgstr "Position du sélecteur"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_VALUE_SCAN_LAST_HIT"
+msgid "Last Hit"
+msgstr "Dernière activité"
+
+#: core/ui/ui_menus.c
 msgctxt "SET_LABEL_REPLY_WINDOW"
 msgid "Reply window"
 msgstr "Fenêtre de réponse"
@@ -4021,6 +4036,11 @@ msgstr "Rép. dble écoute"
 msgctxt "SET_LABEL_DUAL_DELAY"
 msgid "Dual watch delay"
 msgstr "Délai dble écoute"
+
+#: core/ui/ui_menus.c
+msgctxt "SET_LABEL_SCAN_STOP"
+msgid "Scan Stop"
+msgstr "Arrêt du balayage"
 
 #: core/ui/ui_menus.c
 msgctxt "SET_LABEL_SFR_RECEIVE"
@@ -4763,6 +4783,11 @@ msgid "ROAM"
 msgstr "RMNG"
 
 #: core/ui/ui_screens.c
+msgctxt "CHANNEL_UNPROGRAMMED"
+msgid "Unprogrammed"
+msgstr "Non programmé"
+
+#: core/ui/ui_screens.c
 msgctxt "HOME_STATE_P25T_HUNT"
 msgid "Finding system"
 msgstr "Recherche système"
@@ -5303,6 +5328,11 @@ msgid "Other TG: not played"
 msgstr "Autre TG : non lu"
 
 #: core/ui/ui_screens.c
+msgctxt "VOL_VALUE_MUTED"
+msgid "Muted"
+msgstr "En sourdine"
+
+#: core/ui/ui_screens.c
 msgctxt "CALL_HINT_MON_DMON"
 msgid "MON: digital monitor"
 msgstr "MON: moniteur num."
@@ -5491,11 +5521,6 @@ msgstr "OK acquit. Ret cahe"
 msgctxt "VOL_LABEL_SHORT"
 msgid "Vol"
 msgstr "Vol"
-
-#: core/ui/ui_screens.c
-msgctxt "VOL_VALUE_MUTED"
-msgid "Muted"
-msgstr "En sourdine"
 
 #: core/ui/ui_screens.c
 msgctxt "VOL_HINT"

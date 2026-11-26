@@ -256,6 +256,11 @@ bool ui_svc_scan(bool on)
 	return true;
 }
 
+void ui_svc_scan_stay(void)
+{
+	radio_req_scan(RSCAN_STAY);
+}
+
 bool ui_svc_scan_skip(void)
 {
 	radio_req_scan(RSCAN_NUISANCE);
@@ -392,6 +397,11 @@ void ui_svc_dtmf_block(bool blocked)
 	input_set_dtmf_block(blocked);
 }
 
+void ui_svc_switch_menu(bool active)
+{
+	input_switch_menu(active);
+}
+
 void ui_svc_volume_hold(bool hold)
 {
 	radio_req_volume_hold(hold);
@@ -439,6 +449,10 @@ void ui_svc_apply(uint8_t id, int32_t value)
 		break;
 	case UI_SET_TALK_PERMIT:
 		rs.talk_permit = value != 0;
+		break;
+	case UI_SET_SCAN_STOP:
+		rs.scan_stop_mode = value >= RADIO_SCAN_STOP_STAY && value <= RADIO_SCAN_STOP_LAST_HIT ?
+			(uint8_t)value : RADIO_SCAN_STOP_STAY;
 		break;
 	case UI_SET_SCAN_TONE:
 		rs.scan_beep = value != 0;

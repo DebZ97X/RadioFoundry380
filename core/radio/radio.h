@@ -42,6 +42,8 @@ typedef struct {
 #include "radio/radio_p25.h"
 #include "radio/radio_nxdn.h"
 
+enum { RADIO_SCAN_STOP_STAY, RADIO_SCAN_STOP_KNOB, RADIO_SCAN_STOP_LAST_HIT };
+
 typedef enum {
 	RS_IDLE,	// receiving, squelch closed
 	RS_RX,		// receiving, squelch open (carrier and tone)
@@ -88,6 +90,7 @@ typedef struct {
 	uint16_t scan_delay_ms;	// after the signal ends, move on after this long
 	uint16_t scan_dwell_ms;	// listen time per channel with nothing heard
 	bool scan_priority;	// zone scan: revisit the start channel between the others
+	uint8_t scan_stop_mode;	// RADIO_SCAN_STOP_*
 	bool scan_beep;		// a short beep when the scan stops on a signal
 	uint16_t dual_delay_ms;	// dual watch on one receiver: after a signal ends, stay on its channel this long (the
 				// reply), looking at the other one in between
@@ -564,7 +567,7 @@ uint32_t radio_get_satellite_generation(void);
 radio_state_t radio_get_state(void);
 // Just the view's zone index and position and the zone's size (0 while none is loaded), likewise. False while the
 // radio would refuse radio_req_zone_pos (transmitting, a hotspot)
-bool radio_get_zone_pos(uint16_t *zone, uint16_t *pos, uint16_t *size);
+bool radio_get_zone_pos(uint16_t *zone, uint16_t *pos, uint16_t *size, bool *detached);
 #if CONFIG_DMR_TRUNK
 // Runs fn on the whole trunking view as published with the view, under its lock (no copy: the view is 0.5 KB); fn
 // must be short and take no other lock
@@ -578,6 +581,7 @@ void radio_req_stats(uint32_t *handled, uint32_t *dropped);
 
 // Requests (queued, handled by the radio task)
 void radio_req_channel_step(int8_t dir);	// next / previous channel in the zone, wraps
+void radio_req_switch_pos(uint16_t pos);
 void radio_req_zone_pos(uint16_t pos);		// jump to a position in the zone
 void radio_req_zone(uint16_t index);
 void radio_req_vfo(bool on);
@@ -673,7 +677,7 @@ void radio_req_dmr_privacy(uint8_t type, uint16_t key);
 // and zone position pos. Stop stays where the scan is, cancel goes back to where it started. Nuisance leaves the
 // current stop out until the scan ends and moves on. Any channel, zone or VFO change, PTT, or hotspot mode stops it
 // (dual watch: PTT doesn't, and a change starts from the selected channel; radio_req_dual)
-typedef enum { RSCAN_STOP, RSCAN_ZONE, RSCAN_VFO, RSCAN_DUAL, RSCAN_CANCEL, RSCAN_NUISANCE, RSCAN_TOGGLE } radio_scan_cmd_t;
+typedef enum { RSCAN_STOP, RSCAN_ZONE, RSCAN_VFO, RSCAN_DUAL, RSCAN_CANCEL, RSCAN_NUISANCE, RSCAN_TOGGLE, RSCAN_STAY } radio_scan_cmd_t;
 void radio_req_scan(uint8_t cmd);		// radio_scan_cmd_t; TOGGLE: stop if scanning, else zone (or VFO in the VFO)
 void radio_req_scan_vfo(uint32_t lo_hz, uint32_t hi_hz);
 void radio_req_scan_dual(uint16_t pos);		// the current channel (selected) and zone position pos

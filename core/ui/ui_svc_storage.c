@@ -196,6 +196,9 @@ static __attribute__((noinline)) int32_t setting_get_radio(uint8_t id)
 		radio_get_settings(&rs);
 		return rs.bcast_step == RADIO_BCAST_STEP_100 ? 100 : 200;
 #endif
+	case UI_SET_SCAN_STOP:
+		radio_get_settings(&rs);
+		return rs.scan_stop_mode;
 	case UI_SET_TALK_PERMIT:
 	case UI_SET_SCAN_TONE:
 		radio_get_settings(&rs);
@@ -440,6 +443,7 @@ bool ui_svc_setting_set(uint8_t id, int32_t value)
 	case UI_SET_REPLY_S:
 	case UI_SET_TALK_PERMIT:
 	case UI_SET_SCAN_TONE:
+	case UI_SET_SCAN_STOP:
 #if !CONFIG_SIG_TONES
 	case UI_SET_SIG_DMR ... UI_SET_SIG_STEP:	// nothing to set in this build (the menu has no row)
 #endif

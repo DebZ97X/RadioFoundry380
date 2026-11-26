@@ -51,6 +51,7 @@ typedef struct {
 	uint16_t origin_pos;
 	uint32_t origin_hz;
 	bool origin_vfo;
+	uint16_t last_hit;	// one-based zone position of the last channel that held this scan, 0 if none
 	uint16_t sweep_pos;	// the zone sweep's last position (priority revisits don't move it)
 	uint8_t since_priority;	// stops since the start channel
 	// Nuisance delete: zone positions, or VFO frequencies, left out until the scan stops

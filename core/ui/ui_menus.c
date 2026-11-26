@@ -6828,6 +6828,11 @@ static const set_item_t s_display[] = {
 	// can't read the English
 	ACTION(TRN(SET_LABEL_LANGUAGE, "Language"), "idioma langue sprache lingua taal jezyk", SA_LANGUAGE),
 };
+#if CONFIG_SCAN
+static const int16_t v_scan_stop[] = { RADIO_SCAN_STOP_STAY, RADIO_SCAN_STOP_KNOB, RADIO_SCAN_STOP_LAST_HIT };
+static const tr_id_t n_scan_stop[] = { TRN(SET_VALUE_SCAN_STAY, "Scan Position"),
+	TRN(SET_VALUE_SCAN_RETURN_KNOB, "Knob Position"), TRN(SET_VALUE_SCAN_LAST_HIT, "Last Hit") };
+#endif
 static const set_item_t s_talk[] = {
 	NUMBER(TRN(SET_LABEL_REPLY_WINDOW, "Reply window"), NULL, UI_SET_REPLY_S, 0, 30, 1, " s"),
 	LIST(TRN(SET_LABEL_TX_TIMEOUT, "TX timeout"), "TOT", UI_SET_TOT_S, v_tot, n_tot),
@@ -6850,6 +6855,9 @@ static const set_item_t s_talk[] = {
 	TOGGLE(TRN(SET_LABEL_DUAL_TALK_BACK, "Dual watch talk back"), "reply other channel A B", UI_SET_DUAL_TALK_BACK),
 	LIST(TRN(SET_LABEL_DUAL_DELAY, "Dual watch delay"), "resume wait reply A B", UI_SET_DUAL_DELAY_MS, v_dual_wait,
 		n_dual_wait),
+#endif
+#if CONFIG_SCAN
+	LIST(TRN(SET_LABEL_SCAN_STOP, "Scan Stop"), "zone channel knob", UI_SET_SCAN_STOP, v_scan_stop, n_scan_stop),
 #endif
 #if CONFIG_SFR
 	LIST(TRN(SET_LABEL_SFR_RECEIVE, "SFR receive"), "single frequency repeater both copies dual-path rx",
@@ -7063,6 +7071,8 @@ static bool set_hidden(const set_item_t *s)
 		return !(feats() & UI_FEAT_VOLUME);	// a knob sets the volume on the other radios
 	if (s->type != ST_ACTION && s->id == UI_SET_KNOB_WHEN_LOCKED)
 		return !(feats() & UI_FEAT_VOLUME_KNOB);	// only where the MCU reads the knob
+	if (s->type != ST_ACTION && s->id == UI_SET_SCAN_STOP)
+		return board.input == NULL || board.input->position == NULL;
 	if (s->type != ST_ACTION && s->id == UI_SET_BCAST_STEP)
 		return !(feats() & UI_FEAT_BCAST);
 #if CONFIG_RX_EXT
@@ -8067,7 +8077,7 @@ static void scan_select(uint16_t i, bool hold)
 		ui_toast(ui_svc_scan_skip() ? TR(SCAN_TOAST_SKIPPED_UNTIL_STOP, "Skipped until the scan stops") :
 			TR(SCAN_TOAST_NOTHING_TO_SKIP, "Nothing to skip yet"));
 	} else if (i == 1) {
-		ui_svc_scan(false);
+		ui_svc_scan_stay();
 		ui_st.scanning = false;
 		ui_go_home();
 		ui_toast(TR(SCAN_TOAST_STOPPED_HERE, "Scan stopped here"));

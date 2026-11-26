@@ -1480,7 +1480,10 @@ static void take(hrc6000_dmr_t *e, const hrc6000_rx_status_t *s, const dmr_burst
 		}
 	}
 	if (s->kind == DMR_BURST_TERMINATOR_LC) {
-		tr_end(e);
+		// A terminator on the other slot must not stop the shared voice decoder.
+		if (b->ts == 0 || e->tr_ph < 0 || e->phase_ts[e->tr_ph] == 0 || ph == (uint8_t)e->tr_ph) {
+			tr_end(e);
+		}
 	}
 	slot->ev.kind = DMR_EV_BURST_RX;
 	slot->ev.ts = b->ts;
@@ -2386,10 +2389,24 @@ void hrc6000_dmr_configure(hrc6000_dmr_t *e, const dmr_config_t *cfg)
 	unlock(e);
 }
 
+// A channel change can end the software call while the C5000 still hears voice. Start a new LC acquisition
+// on the next burst so the earlier call's delivery state can't suppress late entry.
+static void tick_rx_reacquire_lc(hrc6000_dmr_t *e)
+{
+	if (e->dev->chip->rx_voice_read != NULL) {
+		e->heard_any = false;
+		e->scap_valid = false;
+		e->pa_any = false;
+		e->pa_new = false;
+		e->resume_reads = 0;
+	}
+}
+
 void hrc6000_dmr_rx_restart(hrc6000_dmr_t *e)
 {
 	lock(e);
 	slot_lc_forget(e);	// a new frequency (or a scan step): its slots carry other calls
+	tick_rx_reacquire_lc(e);
 	if (e->running) {
 		if (e->tx_state == TXS_IDLE) {
 			do_restart(e, HRC6000_RS_CMD);
@@ -2404,7 +2421,23 @@ void hrc6000_dmr_rx_restart(hrc6000_dmr_t *e)
 void hrc6000_dmr_rx_lock_slot(hrc6000_dmr_t *e, int8_t ts)
 {
 	lock(e);
-	e->lock_ts = ts > 0 && ts <= 2 ? ts : 0;
+	int8_t next = ts > 0 && ts <= 2 ? ts : 0;
+	bool changed = e->lock_ts > 0 && next > 0 && next != e->lock_ts;
+	e->lock_ts = next;
+	if (changed) {
+		tick_rx_reacquire_lc(e);
+		if (e->tr_active) {
+			// A deliberate handoff starts a new voice search on the selected slot.
+			// Keep CACH timing and both slots' call records.
+			e->tr_ph = -1;
+			e->tr_hdr_ph = -1;
+			e->tr_skip_ph = -1;
+			e->tr_skip_all = false;
+			e->tr_index = 0;
+			e->tr_miss = 0;
+			e->tr_wait = 0;
+		}
+	}
 	unlock(e);
 }
 

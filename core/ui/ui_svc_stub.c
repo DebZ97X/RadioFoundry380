@@ -57,6 +57,7 @@ WEAK bool ui_svc_zone_pending(void) { return false; }
 WEAK bool ui_svc_save_talk_target(uint32_t id, bool private_call) { (void)id; (void)private_call; return false; }
 
 WEAK bool ui_svc_scan(bool on) { (void)on; return false; }
+WEAK void ui_svc_scan_stay(void) { ui_svc_scan(false); }
 WEAK bool ui_svc_roam(uint8_t cmd) { (void)cmd; return false; }
 #if CONFIG_DMR_TRUNK
 WEAK int ui_svc_t3_channel(uint16_t num, const channel_t *ch, bool *usable) { (void)num; (void)ch; (void)usable; return -1; }
@@ -78,6 +79,7 @@ WEAK void ui_svc_vibrate(uint8_t vibe) { (void)vibe; }
 WEAK void ui_svc_ptt_block(bool blocked) { (void)blocked; }
 WEAK void ui_svc_dtmf_block(bool blocked) { (void)blocked; }
 WEAK void ui_svc_volume_hold(bool hold) { (void)hold; }
+WEAK void ui_svc_switch_menu(bool active) { (void)active; }
 WEAK void ui_svc_aprs_msg_poll(void) { }
 WEAK bool ui_svc_aprs_view(aprs_view_t *v) { memset(v, 0, sizeof(*v)); return false; }
 WEAK void ui_svc_poll(void)
