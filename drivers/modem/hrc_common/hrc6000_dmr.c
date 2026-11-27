@@ -2580,6 +2580,7 @@ void hrc6000_dmr_set_cc_filter(hrc6000_dmr_t *e, int8_t cc)
 		}
 	}
 	if (e->running) {
+		tick_rx_reacquire_lc(e);
 		e->restart_pending = true;	// 5.1 after a color code change; during TX, once it ends (tx_finish)
 		e->restart_why = HRC6000_RS_CMD;
 	}

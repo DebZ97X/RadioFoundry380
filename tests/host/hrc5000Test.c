@@ -1546,6 +1546,24 @@ static void test_retune_reopens_lc_acquisition(void)
 	CHECK(!eng.heard_any && !eng.scap_valid && !eng.pa_any && !eng.pa_new);
 }
 
+
+// Digital Monitor removes the fixed color-code filter during an ongoing call.
+static void test_cc_filter_reopens_lc_acquisition(void)
+{
+	tr_setup();
+	eng.cc_filter = 1;
+	eng.heard_any = eng.scap_valid = eng.pa_any = eng.pa_new = true;
+	eng.resume_reads = 2;
+	CHECK(eng.running && !eng.restart_pending);
+
+	hrc6000_dmr_set_cc_filter(&eng, 1);
+	CHECK(eng.heard_any && eng.pa_new && !eng.restart_pending);
+
+	hrc6000_dmr_set_cc_filter(&eng, -1);
+	CHECK(eng.restart_pending && eng.restart_why == HRC6000_RS_CMD);
+	CHECK(!eng.heard_any && !eng.scap_valid && !eng.pa_any && !eng.pa_new && eng.resume_reads == 0);
+}
+
 int main(void)
 {
 	test_chip();
@@ -1561,6 +1579,7 @@ int main(void)
 	test_repeater_slot();
 	test_two_slots();
 	test_retune_reopens_lc_acquisition();
+	test_cc_filter_reopens_lc_acquisition();
 	test_tx_listen_rc_field();
 	printf("hrc5000Test: %s (%d failures)\n", failures ? "FAILED" : "passed", failures);
 	return failures ? 1 : 0;
