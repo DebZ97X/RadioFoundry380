@@ -7072,7 +7072,7 @@ static bool set_hidden(const set_item_t *s)
 	if (s->type != ST_ACTION && s->id == UI_SET_KNOB_WHEN_LOCKED)
 		return !(feats() & UI_FEAT_VOLUME_KNOB);	// only where the MCU reads the knob
 	if (s->type != ST_ACTION && s->id == UI_SET_SCAN_STOP)
-		return board.input == NULL || board.input->position == NULL;
+		return !board_channel_switch();
 	if (s->type != ST_ACTION && s->id == UI_SET_BCAST_STEP)
 		return !(feats() & UI_FEAT_BCAST);
 #if CONFIG_RX_EXT

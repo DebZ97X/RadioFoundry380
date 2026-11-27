@@ -670,7 +670,7 @@ static bool channel_read(uint16_t number, channel_t *ch)
 // (core/dmr/ambe routes the speaker itself); the green LED shows a call being played
 static bool position_empty(const radio_sm_t *sm)
 {
-	return board.input != NULL && board.input->position != NULL && !sm->view.vfo &&
+	return board_channel_switch() && !sm->view.vfo &&
 	       sm->have_channels && sm->view.channel_number == 0;
 }
 
@@ -1353,7 +1353,7 @@ static void leave_vfo(radio_sm_t *sm, uint32_t now_ms)
 {
 	uint16_t pos;
 	channel_t ch;
-	if (sm->have_channels && board.input != NULL && board.input->position != NULL &&
+	if (sm->have_channels && board_channel_switch() &&
 	    sm->view.zone_pos >= sm->zone.count) {
 		// A physical slot can be empty and still be the saved memory position.
 		sm->view.vfo = false;
@@ -5424,20 +5424,21 @@ static void scan_stop_asked(radio_sm_t *sm, bool cancel, bool use_preference, ui
 		sm->dual_keep[0].valid = sm->dual_keep[1].valid = false;
 #endif
 	}
-	const hal_input_t *input = board.input;
 	bool use = !cancel && use_preference && scan_on(&sm->scan) && sm->scan.kind == SCAN_ZONE &&
-		   input != NULL && input->position != NULL;
+		   board_channel_switch();
 	uint16_t last_hit = sm->scan.last_hit;
 	scan_stop(sm, cancel, now_ms);
 	if (use && sm->set.scan_stop_mode == RADIO_SCAN_STOP_LAST_HIT && last_hit != 0 &&
 	    last_hit - 1u != sm->view.zone_pos) {
 		scan_tune_pos(sm, (uint16_t)(last_hit - 1u), now_ms);
 	}
+#if RFOUNDRY_CHANNEL_SWITCH
 	if (use && sm->set.scan_stop_mode == RADIO_SCAN_STOP_KNOB) {
-		int8_t pos = input->position();
+		int8_t pos = board.input->position();
 		if (pos >= 0 && (uint16_t)pos != sm->view.zone_pos)
 			select_switch_position(sm, (uint16_t)pos, now_ms);
 	}
+#endif
 }
 
 static void scan_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
@@ -8592,7 +8593,7 @@ static void zone_pos_request(radio_sm_t *sm, const radio_req_t *req, bool busy, 
 	if (busy || !sm->have_channels || req->arg < 0) {
 		return;
 	}
-	if (req->arg2 != 0) {
+	if (RFOUNDRY_CHANNEL_SWITCH && req->arg2 != 0) {
 		select_switch_position(sm, (uint16_t)req->arg, now_ms);
 		return;
 	}
@@ -9137,7 +9138,7 @@ static void bench_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_m
 void radio_sm_request(radio_sm_t *sm, const radio_req_t *req, uint32_t now_ms)
 {
 	// Dual Watch handles knob detents through the selected pane, even as the receiver looks at the other pane.
-	if (req->type == RREQ_ZONE_POS && req->arg2 != 0 &&
+	if (RFOUNDRY_CHANNEL_SWITCH && req->type == RREQ_ZONE_POS && req->arg2 != 0 &&
 	    (dual_running(sm) || sm->view.vfo || sm->ptt || sm->view.state == RS_TX || sm->hotspot || !sm->have_channels))
 		return;
 	sm->led_now = now_ms;

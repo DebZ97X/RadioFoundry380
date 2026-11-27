@@ -1159,14 +1159,14 @@ bool ui_home_key(const input_event_t *ev)
 		if (arrows && !view->vfo && ui_st.updown == 1) {
 			int dir = nav_dir(ev);
 			// With the knob selecting slots, Down moves forward through the zone list.
-			zone_step(board.input != NULL && board.input->position != NULL ? -dir : dir);
+			zone_step(board_channel_switch() ? -dir : dir);
 			return true;
 		}
 #if CONFIG_DMR
 		if (arrows && !view->vfo && ui_st.updown == 2 && view->ch.mode == RADIO_MODE_DMR && talk_step(nav_dir(ev)))
 			return true;
 #endif
-		if (!view->vfo && board.input != NULL && board.input->position != NULL)
+		if (!view->vfo && board_channel_switch())
 			return true;
 		for (int i = steps(ev); i > 0; i--) {
 			if (view->vfo)
@@ -2504,7 +2504,7 @@ bool ui_app_tick(const radio_view_t *v, uint32_t now_ms)
 	static uint16_t preview_zone, preview_pos;
 	static uint32_t preview_ms;
 	static bool preview_tracking;
-	bool track = board.input != NULL && board.input->position != NULL &&
+	bool track = board_channel_switch() &&
 		     stack[sp].scr == SCR_HOME && !v->vfo && v->scan == 0;
 	bool preview = ui_st.channel_preview;
 	if (!track || !preview_tracking || preview_zone != v->zone_index) {
