@@ -12,7 +12,7 @@ MCU_DEFS   := -DHRC_XIP_FLASH_SIZE=0x200000u
 MCU_DEFS   += -DCODEPLUG_OPENFW_EEPROM_BASE=0x110000u -DCODEPLUG_OPENFW_FLASH_BASE=0x130000u
 # The channel knob is a 16-position switch read as a position (input_rt10.c, hal_input_t.position)
 BOARD_CHANNEL_SWITCH := y
-BOARD_DIRS := boards/rt10 drivers/rf/rfbus drivers/rf/fd6818 drivers/modem/hrc7000 drivers/rf/subaudio drivers/bus/i2c_gpio drivers/flash/spi_nor drivers/input/sharedptt drivers/input/chswitch
+BOARD_DIRS := boards/rt10 drivers/rf/rfbus drivers/rf/fd6818 drivers/modem/hrc7000 drivers/rf/subaudio drivers/bus/i2c_gpio drivers/flash/spi_nor drivers/input/sharedptt drivers/input/plugptt drivers/input/chswitch
 # No display: the core still draws into a 128x64 1 bpp frame buffer (display_rt10.c), read only by the debug link
 MCU_DEFS   += -DGFX_FB_BYTES=1024u -DGFX_MAX_ROWS=64u
 # PTT shares UART0's RX line, and the radio sending while the host still sends latched that line low until a power
