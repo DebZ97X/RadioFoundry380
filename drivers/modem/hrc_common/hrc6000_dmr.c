@@ -1184,6 +1184,7 @@ static bool slot_lc_open(const hrc6000_dmr_t *e, int i)
 static void slot_lc_forget(hrc6000_dmr_t *e)
 {
 	memset(e->slot_lc, 0, sizeof(e->slot_lc));
+	e->lc_slot_handoff = false;
 }
 
 // Group or unit voice channel user (FLCO 0 or 3): a call's LC, not an alias or GPS block (the core's dmr_lc_is_voice;
@@ -1209,6 +1210,9 @@ static bool lc_slot_ok(hrc6000_dmr_t *e, int8_t ts, const uint8_t lc[9], bool at
 		return true;	// this slot's own call, even when the other slot's carries the same LC (a bridged group)
 	}
 	if (slot_lc_live(e, other) && memcmp(lc, e->slot_lc[other].lc, 9) == 0) {
+		if (e->lc_slot_handoff && ts == e->lock_ts && e->slot_lc[me].known &&
+		    memcmp(lc, e->slot_lc[me].lc, 9) != 0)
+			return false;	// the selected slot has a different known call
 		if (e->slot_lc[other].open && !slot_voice_taken(e)) {
 			e->slot_lc[other].seen_tick = e->tick;	// still talking, as far as can be told
 		}
@@ -1252,6 +1256,8 @@ static void lc_slot_set(hrc6000_dmr_t *e, int8_t ts, const uint8_t lc[9], bool o
 		return;
 	}
 	int i = ts - 1;
+	if (ts == e->lock_ts)
+		e->lc_slot_handoff = false;
 	memcpy(e->slot_lc[i].lc, lc, 9);
 	e->slot_lc[i].known = true;
 	e->slot_lc[i].open = open;
@@ -1416,6 +1422,8 @@ static void take(hrc6000_dmr_t *e, const hrc6000_rx_status_t *s, const dmr_burst
 		bool two = (ts == 1 || ts == 2) && slot_lc_live(e, 2 - ts);
 		bool looking = !e->lc_given || (two && !slot_lc_open(e, ts - 1));
 		bool counted = e->voice_since_start > STALE_LC_VOICE;
+		if (e->lc_slot_handoff && e->cfg.repeater && ts != 0 && ts == e->lock_ts)
+			b->emb_valid = hrc_read_burst(e->dev, HRC_PAGE_DATA, 0x30, b->emb, sizeof(b->emb));
 		if (s->voice_index == 5) {	// the embedded LC of B-E is assembled by F
 			bool changed = lc_read(e, b->lc);
 			bool mine = lc_slot_ok(e, ts, b->lc, s->crc_ok);
@@ -2423,6 +2431,8 @@ void hrc6000_dmr_rx_lock_slot(hrc6000_dmr_t *e, int8_t ts)
 	lock(e);
 	int8_t next = ts > 0 && ts <= 2 ? ts : 0;
 	bool changed = e->lock_ts > 0 && next > 0 && next != e->lock_ts;
+	if (next != e->lock_ts)
+		e->lc_slot_handoff = changed && e->dev->chip->rx_voice_read != NULL;
 	e->lock_ts = next;
 	if (changed) {
 		tick_rx_reacquire_lc(e);

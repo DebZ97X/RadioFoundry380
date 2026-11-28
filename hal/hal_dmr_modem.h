@@ -60,6 +60,8 @@ typedef struct {
 	uint8_t len;		// payload bytes: 27 voice, 12 rate 1/2 (LC/CSBK/header 9+3 CRC), 18 rate 3/4, 24 rate 1
 	uint8_t payload[DMR_PAYLOAD_MAX];
 	uint8_t lc[9];		// full LC without CRC
+	bool emb_valid;		// raw middle field sampled during a locked-slot handoff
+	uint8_t emb[6];
 } dmr_burst_t;
 
 typedef enum {

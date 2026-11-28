@@ -2225,6 +2225,41 @@ static void test_rx_group_callback(void)
 	CHECK(sink_log.begins == 1);
 }
 
+// Raw B-E fragments captured on TS2 during the failed C5000 handoff.
+static void test_raw_late_entry(void)
+{
+	static const uint8_t emb[4][6] = {
+		{ 0x13, 0x05, 0x0f, 0x0c, 0x06, 0x91 },
+		{ 0x17, 0x0c, 0x0a, 0x05, 0x03, 0x74 },
+		{ 0x17, 0x09, 0x14, 0x1e, 0x00, 0x74 },
+		{ 0x15, 0x11, 0x05, 0x12, 0x05, 0x07 },
+	};
+	dmr_call_config_t c = base_cfg();
+	c.rmo = true;
+	c.ts = 2;
+	c.talk_target.id = 91;
+
+	for (int gap = 0; gap <= 1; gap++) {
+		setup(&c);
+		for (unsigned i = 0; i < 4; i++) {
+			dmr_burst_t b = {
+				.kind = DMR_BURST_VOICE, .voice_index = (uint8_t)(i + 1),
+				.ts = 2, .cc = 1, .sync = DMR_SYNC_BS, .len = 27,
+				.crc_ok = true, .in_step = true, .emb_valid = true,
+			};
+			memcpy(b.emb, emb[i], sizeof(b.emb));
+			sim_rx_at(&b, 100u + 2u * i + (gap && i >= 2 ? 2u : 0u));
+			run_ms(60);
+		}
+		if (gap) {
+			CHECK(sink_log.begins == 0);
+		} else {
+			CHECK(sink_log.begins == 1 && sink_log.frames > 0);
+			CHECK(sink_log.caller.late_entry && sink_log.caller.src == 3122516 && sink_log.caller.dst == 91);
+		}
+	}
+}
+
 static void test_late_entry(void)
 {
 	dmr_call_config_t c = base_cfg();
@@ -3781,6 +3816,7 @@ int main(void)
 	test_rx_own_id_parrot();
 	test_rx_resumed_call();
 	test_late_entry();
+	test_raw_late_entry();
 	test_alias_and_privacy();
 	test_privacy_hook();
 	test_emergency_tx();

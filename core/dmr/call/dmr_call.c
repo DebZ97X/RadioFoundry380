@@ -110,6 +110,9 @@ static struct {
 	bool term_seen;
 	dmr_ta_t ta;
 	// late entry
+	dmr_emb_rx_t le_emb;
+	uint32_t le_emb_slot;
+	int8_t le_emb_ts;
 	bool le_active;
 	bool le_pair;		// two consecutive voice bursts seen
 	uint8_t le_last_index;
@@ -543,6 +546,8 @@ static void le_reset(void)
 	s.le_active = false;
 	s.le_pair = false;
 	s.le_held = false;
+	dmr_emb_rx_reset(&s.le_emb);
+	s.le_emb_slot = 0;
 }
 
 static bool group_listened(uint32_t tg, uint32_t now)
@@ -952,6 +957,27 @@ static void rx_voice(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 // a voice burst is an LC of this reception (docs/spec/dmr-modem.md 2.4, 6.1). Checking again here against the
 // previous call's LC cost a whole superframe more whenever the same talker called again (HIL 2026-10-10: a late entry
 // played from the fourth superframe heard instead of the third)
+static bool rx_late_emb(const dmr_burst_t *b, uint32_t slot, uint8_t lc[DMR_LC_BYTES])
+{
+	if (!b->emb_valid || !ts_known(b) || b->ts != s.cfg.ts || slot == 0) {
+		dmr_emb_rx_reset(&s.le_emb);
+		s.le_emb_slot = 0;
+		return false;
+	}
+	if (s.le_emb_ts != b->ts || s.le_emb_slot == 0 || slot - s.le_emb_slot != 2u)
+		dmr_emb_rx_reset(&s.le_emb);
+	s.le_emb_ts = b->ts;
+	s.le_emb_slot = slot;
+	uint8_t cc, lcss;
+	bool pi;
+	uint16_t emb = (uint16_t)((uint16_t)b->emb[0] << 8) | b->emb[5];
+	if (dmrFecEmbDecode(emb, &cc, &pi, &lcss) < 0 || cc != s.cfg.cc || lcss == 0) {
+		dmr_emb_rx_reset(&s.le_emb);
+		return false;
+	}
+	return dmr_emb_rx_push(&s.le_emb, b->emb + 1, lcss, lc) && dmr_lc_is_voice(lc);
+}
+
 static void rx_late_entry(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 {
 	uint8_t i = b->voice_index % 6;
@@ -972,6 +998,18 @@ static void rx_late_entry(const dmr_burst_t *b, uint32_t now, uint32_t slot)
 	s.le_held = false;
 	s.le_last_index = i;
 	s.le_last_ms = now;
+
+	dmr_burst_t decoded;
+	uint8_t lc[DMR_LC_BYTES];
+	if (rx_late_emb(b, slot, lc)) {
+		decoded = *b;
+		memcpy(decoded.lc, lc, sizeof(lc));
+		decoded.lc_valid = true;
+		b = &decoded;
+#if DMR_RX_TRACE
+		dlog("cle raw ts%d @%u", b->ts, (unsigned)slot);
+#endif
+	}
 
 	const dmr_burst_t *from = b;	// the burst whose LC starts the call
 
@@ -2141,6 +2179,7 @@ void dmr_call_configure(const dmr_call_config_t *cfg)
 		if (s.tx != TX_NONE)
 			s.tx = s.ptt ? TX_DENIED : TX_NONE;
 		rx_end(s.now);
+		le_reset();
 		s.rpt_seen = s.rpt_bursts = false;
 	}
 	s.cfg = *cfg;

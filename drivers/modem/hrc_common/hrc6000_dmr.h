@@ -239,6 +239,7 @@ typedef struct {
 	dmr_config_t cfg;
 	int8_t cc_filter;	// -1 any
 	int8_t lock_ts;		// rx_lock_slot
+	bool lc_slot_handoff;	// prefer the selected slot's cached call after an explicit switch
 
 	// Slot clock
 	uint32_t tick;
